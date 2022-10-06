@@ -1,0 +1,18 @@
+mainmodule pagerank {
+  readonly CProxy_Main mainProxy;
+
+  mainchare Main {
+    entry Main(CkArgMsg *m);
+    entry void initDone(void);
+    entry [reductiontarget] void done(void);
+  };
+
+  array [1D] Graph {
+    entry Graph(void);
+    entry void addEdge(int dest);
+    entry [threaded] void runpagerank(float alpha, int iters);
+    entry void update(float alpha);
+    entry void iterate();
+    entry void addB(float b_in);
+  };        	
+};
