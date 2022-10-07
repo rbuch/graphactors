@@ -12,6 +12,8 @@
 /*mainchare*/
 class Main : public CBase_Main
 {
+  private:
+    double start;
   public:
     Main(CkArgMsg* m)
     {
@@ -77,12 +79,14 @@ class Main : public CBase_Main
     void initDone(void)
     {
       CkPrintf("Graph created!\n");
+      start = CkWallTimer();
       arrProxy[0].runlabelprop();
     }
 
     void done(uint64_t count)
     {
-      CkPrintf("%ld non-roots found\n", count);
+      const auto end = CkWallTimer();
+      CkPrintf("%ld non-roots found in %fs\n", count, end - start);
       CkPrintf("All done\n");
       CkExit();
     };
