@@ -134,9 +134,9 @@ class Graph : public CBase_Graph
 
       if (!isFresh)
       {
-        unsigned long long nonroot = (label == thisIndex) ? 0 : 1;
+        unsigned int nonroot = (label == thisIndex) ? 0 : 1;
         CkCallback cb(CkReductionTarget(Main, done), mainProxy);
-        contribute(sizeof(unsigned long long), &nonroot, CkReduction::sum_ulong_long, cb);
+        contribute(sizeof(unsigned int), &nonroot, CkReduction::sum_uint, cb);
       }
       else
       {
