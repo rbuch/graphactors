@@ -1,0 +1,18 @@
+mainmodule labelprop {
+  readonly CProxy_Main mainProxy;
+
+  mainchare Main {
+    entry Main(CkArgMsg *m);
+    entry void initDone(void);
+    entry [reductiontarget] void done(uint64_t count);
+  };
+
+  array [1D] Graph {
+    entry Graph(void);
+    entry void addEdge(uint64_t dest);
+    entry void runlabelprop();
+    entry [reductiontarget] void update();
+    entry [reductiontarget] void iterate(bool isFresh);
+    entry void propagate(uint64_t candidateLabel);
+  };
+};
