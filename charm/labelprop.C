@@ -78,7 +78,13 @@ class Main : public CBase_Main
 
     void initDone(void)
     {
-      CkPrintf("Graph created!\n");
+      CkCallback cb(CkReductionTarget(Main, startComputation), thisProxy);
+      arrProxy.getEdgeCount(cb);
+    }
+
+    void startComputation(unsigned int count)
+    {
+      CkPrintf("Graph created, %d total edges\n", count);
       start = CkWallTimer();
       arrProxy[0].runlabelprop();
     }
@@ -109,6 +115,12 @@ class Graph : public CBase_Graph
     void addEdge(unsigned int dest)
     {
       edges.insert(dest);
+    }
+
+    void getEdgeCount(CkCallback cb)
+    {
+      unsigned int count = edges.size();
+      contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
     }
 
     void runlabelprop()
