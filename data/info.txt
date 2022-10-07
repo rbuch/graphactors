@@ -1,1 +1,1 @@
-wiki-Vote and web-Google are from https://snap.stanford.edu/data/index.html
+wiki-Vote, web-Google, and web-Stanford are from https://snap.stanford.edu/data/index.html
