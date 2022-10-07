@@ -30,14 +30,14 @@ class Main : public CBase_Main
       delete m;
 
       std::string line;
-      uint64_t max = 0;
+      unsigned int max = 0;
 
       while (std::getline(infile, line))
       {
         if (line[0] == '#')
           continue;
         std::stringstream ss(line);
-        uint64_t src, dest;
+        unsigned int src, dest;
         ss >> src;
         ss >> dest;
 
@@ -50,7 +50,7 @@ class Main : public CBase_Main
       max += 1;
 
       // Start the computation
-      CkPrintf("Running labelprop on %d processors, %ld nodes\n", CkNumPes(), max);
+      CkPrintf("Running labelprop on %d processors, %d nodes\n", CkNumPes(), max);
       mainProxy = thisProxy;
       arrProxy = CProxy_Graph::ckNew(max);
 
@@ -62,7 +62,7 @@ class Main : public CBase_Main
         if (line[0] == '#')
           continue;
         std::stringstream ss(line);
-        uint64_t src, dest;
+        unsigned int src, dest;
         ss >> src;
         ss >> dest;
 
@@ -83,10 +83,10 @@ class Main : public CBase_Main
       arrProxy[0].runlabelprop();
     }
 
-    void done(uint64_t count)
+    void done(unsigned int count)
     {
       const auto end = CkWallTimer();
-      CkPrintf("%ld non-roots found in %fs\n", count, end - start);
+      CkPrintf("%d non-roots found in %fs\n", count, end - start);
       CkPrintf("All done\n");
       CkExit();
     };
@@ -96,9 +96,9 @@ class Main : public CBase_Main
 class Graph : public CBase_Graph
 {
   private:
-    std::set<uint64_t> edges;
-    uint64_t label = thisIndex;
-    uint64_t oldLabel = std::numeric_limits<uint64_t>::max();
+    std::set<unsigned int> edges;
+    unsigned int label = thisIndex;
+    unsigned int oldLabel = std::numeric_limits<unsigned int>::max();
     bool fresh;
 
   public:
@@ -106,7 +106,7 @@ class Graph : public CBase_Graph
 
     Graph(CkMigrateMessage* m) {}
 
-    void addEdge(uint64_t dest)
+    void addEdge(unsigned int dest)
     {
       edges.insert(dest);
     }
@@ -142,7 +142,7 @@ class Graph : public CBase_Graph
       {
         if (fresh)
         {
-          for (uint64_t dest : edges)
+          for (unsigned int dest : edges)
           {
             thisProxy[dest].propagate(label);
           }
@@ -155,7 +155,7 @@ class Graph : public CBase_Graph
       }
     }
 
-    void propagate(uint64_t candidateLabel)
+    void propagate(unsigned int candidateLabel)
     {
       if (candidateLabel < label)
       {
