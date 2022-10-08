@@ -7,13 +7,13 @@
 #include <string>
 
 /*readonly*/ CProxy_Main mainProxy;
-/*readonly*/ CProxy_Graph arrProxy;
 
 /*mainchare*/
 class Main : public CBase_Main
 {
   private:
     double start;
+    CProxy_Graph arrProxy;
   public:
     Main(CkArgMsg* m)
     {
