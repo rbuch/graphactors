@@ -1,0 +1,22 @@
+mainmodule labelprop_chunk {
+  readonly CProxy_Main mainProxy;
+  readonly unsigned int numChunks;
+  readonly unsigned int verticesPerChunk;
+
+  mainchare Main {
+    entry Main(CkArgMsg *m);
+    entry void initDone(void);
+    entry [reductiontarget] void startComputation(unsigned int count);
+    entry [reductiontarget] void done(unsigned int count);
+  };
+
+  array [1D] Graph {
+    entry Graph(int numVertices, int numElements);
+    entry void addEdge(unsigned int src, unsigned int dest);
+    entry void getEdgeCount(CkCallback cb);
+    entry void runlabelprop();
+    entry [reductiontarget] void update();
+    entry [reductiontarget] void iterate(bool isFresh);
+    entry void propagate(unsigned int dest, unsigned int candidateLabel);
+  };
+};
