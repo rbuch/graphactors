@@ -1,2 +1,2 @@
-soc-Slashdot0811, wiki-Vote, web-Google, and web-Stanford are from
+email-EuAll, soc-Slashdot0811, wiki-Vote, web-Google, and web-Stanford are from
 https://snap.stanford.edu/data/index.html
