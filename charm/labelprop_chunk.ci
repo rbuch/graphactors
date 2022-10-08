@@ -17,6 +17,6 @@ mainmodule labelprop_chunk {
     entry void runlabelprop();
     entry [reductiontarget] void update();
     entry [reductiontarget] void iterate(bool isFresh);
-    entry void propagate(unsigned int dest, unsigned int candidateLabel);
+    entry void propagate(std::pair<unsigned int, unsigned int> candidate);
   };
 };

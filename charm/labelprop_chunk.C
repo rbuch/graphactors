@@ -206,7 +206,10 @@ class Graph : public CBase_Graph
           {
             for (const auto& dest : edges[i])
             {
-              thisProxy[CHUNKINDEX(dest)].propagate(dest, labels[i]);
+              if (CHUNKINDEX(dest) == thisIndex)
+                propagate(std::make_pair(dest, labels[i]));
+              else
+                thisProxy[CHUNKINDEX(dest)].propagate(std::make_pair(dest, labels[i]));
             }
           }
         }
@@ -218,11 +221,14 @@ class Graph : public CBase_Graph
       }
     }
 
-    void propagate(unsigned int dest, unsigned int candidateLabel)
+    void propagate(std::pair<unsigned int, unsigned int> candidate)
     {
-      if (candidateLabel < labels[dest - base])
+      const auto dest = candidate.first;
+      const auto newLabel = candidate.second;
+
+      if (newLabel < labels[dest - base])
       {
-        labels[dest - base] = candidateLabel;
+        labels[dest - base] = newLabel;
       }
     }
 };
