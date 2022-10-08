@@ -67,8 +67,11 @@ class Main : public CBase_Main
         ss >> dest;
 
         // Assumes input is a directed graph, so convert to undirected
-        arrProxy[src].addEdge(dest);
-        arrProxy[dest].addEdge(src);
+        if (src != dest)
+        {
+          arrProxy[src].addEdge(dest);
+          arrProxy[dest].addEdge(src);
+        }
       }
 
       CkPrintf("Done adding edges\n");
