@@ -15,6 +15,8 @@
 
 #define CHUNKINDEX(X) (std::min(numChunks - 1, X / verticesPerChunk))
 
+constexpr int TRACE_PROPAGATE = 11;
+
 /*mainchare*/
 class Main : public CBase_Main
 {
@@ -91,6 +93,9 @@ class Main : public CBase_Main
       }
 
       CkPrintf("Done adding edges\n");
+
+      traceRegisterUserEvent("propagate", TRACE_PROPAGATE);
+
       CkCallback initCB(CkIndex_Main::initDone(), thisProxy);
       CkStartQD(initCB);
     };
@@ -104,6 +109,7 @@ class Main : public CBase_Main
     void startComputation(unsigned int count)
     {
       CkPrintf("Graph created, %d total edges\n", count);
+      traceBegin();
       start = CkWallTimer();
       arrProxy[0].runlabelprop();
     }
@@ -204,6 +210,7 @@ class Graph : public CBase_Graph
       }
       else
       {
+        traceBeginUserBracketEvent(TRACE_PROPAGATE);
         for (int i = 0; i < fresh.size(); i++)
         {
           if (fresh[i])
@@ -211,12 +218,17 @@ class Graph : public CBase_Graph
             for (const auto& dest : edges[i])
             {
               if (CHUNKINDEX(dest) == thisIndex)
+              {
                 propagate(std::make_pair(dest, labels[i]));
+              }
               else
+              {
                 thisProxy[CHUNKINDEX(dest)].propagate(std::make_pair(dest, labels[i]));
+              }
             }
           }
         }
+        traceEndUserBracketEvent(TRACE_PROPAGATE);
         if (thisIndex == 0)
         {
           CkCallback cb(CkIndex_Graph::update(), thisProxy);
