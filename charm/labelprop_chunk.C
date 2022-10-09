@@ -7,6 +7,7 @@
 #include <string>
 
 #include <algorithm>
+#include <utility>
 
 /*readonly*/ CProxy_Main mainProxy;
 /*readonly*/ unsigned int numChunks;
@@ -84,8 +85,8 @@ class Main : public CBase_Main
         // Assumes input is a directed graph, so convert to undirected
         if (src != dest)
         {
-          arrProxy[CHUNKINDEX(src)].addEdge(src, dest);
-          arrProxy[CHUNKINDEX(dest)].addEdge(dest, src);
+          arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, dest));
+          arrProxy[CHUNKINDEX(dest)].addEdge(std::make_pair(dest, src));
         }
       }
 
@@ -151,8 +152,11 @@ class Graph : public CBase_Graph
 
     Graph(CkMigrateMessage* m) {}
 
-    void addEdge(unsigned int src, unsigned int dest)
+    void addEdge(std::pair<unsigned int, unsigned int> edge)
     {
+      const auto src = edge.first;
+      const auto dest = edge.second;
+
       edges[src - base].insert(dest);
     }
 
