@@ -1,33 +1,35 @@
-CHARMC?=../../../../bin/charmc $(OPTS)
+CHARMC?=../../../../bin/charmc
+
+OPTS=-O3 -march=native
 
 all: pagerank labelprop labelprop_chunk
 
 pagerank: pagerank.o
-	$(CHARMC) -language charm++ -o $@ $^
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
 
 labelprop: labelprop.o
-	$(CHARMC) -language charm++ -o $@ $^
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
 
 labelprop_chunk: labelprop_chunk.o
-	$(CHARMC) -language charm++ -o $@ $^
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
 
 pagerank.decl.h: pagerank.ci
-	$(CHARMC)  $^
+	$(CHARMC) $(OPTS)  $^
 
 labelprop.decl.h: labelprop.ci
-	$(CHARMC)  $^
+	$(CHARMC) $(OPTS)  $^
 
 labelprop_chunk.decl.h: labelprop_chunk.ci
-	$(CHARMC)  $^
+	$(CHARMC) $(OPTS)  $^
 
 clean:
 	rm -f *.decl.h *.def.h conv-host *.o labelprop labelprop_chunk pagerank charmrun
 
 pagerank.o: pagerank.C pagerank.decl.h
-	$(CHARMC) -c $<
+	$(CHARMC) $(OPTS) -c $<
 
 labelprop.o: labelprop.C labelprop.decl.h
-	$(CHARMC) -c $<
+	$(CHARMC) $(OPTS) -c $<
 
 labelprop_chunk.o: labelprop_chunk.C labelprop_chunk.decl.h
-	$(CHARMC) -c $<
+	$(CHARMC) $(OPTS) -c $<
