@@ -15,7 +15,7 @@ mainmodule labelprop_chunk {
     entry void addEdge(unsigned int src, unsigned int dest);
     entry void getEdgeCount(CkCallback cb);
     entry void runlabelprop();
-    entry [reductiontarget] void update();
+    entry void update();
     entry [reductiontarget] void iterate(bool isFresh);
     entry [aggregate] void propagate(std::pair<unsigned int, unsigned int> candidate);
   };

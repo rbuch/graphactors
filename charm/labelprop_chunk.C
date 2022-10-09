@@ -215,7 +215,7 @@ class Graph : public CBase_Graph
         }
         if (thisIndex == 0)
         {
-          CkCallback cb(CkReductionTarget(Graph, update), thisProxy);
+          CkCallback cb(CkIndex_Graph::update(), thisProxy);
           CkStartQD(cb);
         }
       }
