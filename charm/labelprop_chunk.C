@@ -128,6 +128,8 @@ class Graph : public CBase_Graph
 
     unsigned int base;
 
+    double start;
+
   public:
     Graph(int numVertices, int numElements)
         : base(thisIndex * (numVertices / numElements)) {
@@ -170,11 +172,17 @@ class Graph : public CBase_Graph
 
     void runlabelprop()
     {
+      start = CkWallTimer();
       thisProxy.update();
     }
 
     void update()
     {
+      if (thisIndex == 0)
+      {
+        CkPrintf("Iteration: %f\n", CkWallTimer() - start);
+      }
+
       bool localFresh = false;
       for (int i = 0; i < labels.size(); i++)
       {
@@ -189,11 +197,6 @@ class Graph : public CBase_Graph
 
     void iterate(bool isFresh)
     {
-      if (thisIndex == 0)
-      {
-        CkPrintf("Iteration: fresh: %s\n", isFresh ? "true" : "false");
-      }
-
       if (!isFresh)
       {
         unsigned int nonroot = 0;
