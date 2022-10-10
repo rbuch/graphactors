@@ -6,8 +6,16 @@
 #include <sstream>
 #include <string>
 
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <utility>
+#include <filesystem>
+#include <tuple>
 
 /*readonly*/ CProxy_Main mainProxy;
 /*readonly*/ unsigned int numChunks;
@@ -21,6 +29,32 @@ class Main : public CBase_Main
   private:
     double start;
     CProxy_Graph arrProxy;
+
+    std::tuple<const char*, int, size_t> mapFile(std::filesystem::path p)
+    {
+      int fd = open(p.c_str(), O_RDONLY);
+      if (fd == -1)
+      {
+        CkAbort("Could not open file %s\n", p.c_str());
+      }
+
+      struct stat stats;
+      if (fstat(fd, &stats) == -1)
+      {
+        CkAbort("Could not stat fd %d\n", fd);
+      }
+
+      const size_t fsize = stats.st_size;
+
+      const char* mappedFile =
+          static_cast<const char*>(mmap(nullptr, fsize, PROT_READ, MAP_PRIVATE, fd, 0));
+      if (mappedFile == MAP_FAILED)
+      {
+        CkAbort("Could not map fd %d\n", fd);
+      }
+
+      return std::make_tuple(mappedFile, fd, fsize);
+    }
   public:
     Main(CkArgMsg* m)
     {
@@ -32,65 +66,68 @@ class Main : public CBase_Main
 
       if (m->argc <= 2)
       {
-        CkAbort("No chares per PE argument provided!");
+        CkAbort("No numVertices argument provided");
       }
 
-      numChunks = std::stoi(m->argv[2]) * CkNumPes();
-
-      std::ifstream infile;
-      infile.open(m->argv[1]);
-      if (!infile)
-        CkAbort("Could not open file %s", m->argv[1]);
-      delete m;
-
-      std::string line;
-      unsigned int max = 0;
-
-      while (std::getline(infile, line))
+      if (m->argc <= 3)
       {
-        if (line[0] == '#')
-          continue;
-        std::stringstream ss(line);
-        unsigned int src, dest;
-        ss >> src;
-        ss >> dest;
-
-        if (src > max)
-          max = src;
-        if (dest > max)
-          max = dest;
+        CkPrintf("No chares per PE argument provided, defaulting to 1!\n");
       }
 
-      max += 1;
-      verticesPerChunk = max / numChunks;
-      // Start the computation
+      unsigned int numVertices = std::stoi(m->argv[2]);
+
+      const auto chunksPerPE = (m->argc <= 3) ? 1 : std::stoi(m->argv[3]);
+      numChunks = chunksPerPE * CkNumPes();
+
+      verticesPerChunk = numVertices / numChunks;
+
       CkPrintf("Running labelprop_chunk on with %d chunks, %d processors, %d "
-               "nodes\n",
-               numChunks, CkNumPes(), max);
+               "vertices\n",
+               numChunks, CkNumPes(), numVertices);
       mainProxy = thisProxy;
-      arrProxy = CProxy_Graph::ckNew(max, numChunks, numChunks);
+      arrProxy = CProxy_Graph::ckNew(numVertices, numChunks, numChunks);
 
-      infile.clear();
-      infile.seekg(0);
 
-      while (std::getline(infile, line))
+      std::filesystem::path p(m->argv[1]);
+
+      const char *nodeFile, *edgeFile;
+      int nodeFd, edgeFd;
+      size_t nodeFSize, edgeFSize;
+
+      std::tie(nodeFile, nodeFd, nodeFSize) = mapFile(p.replace_extension(".nodes"));
+      std::tie(edgeFile, edgeFd, edgeFSize) = mapFile(p.replace_extension(".edges"));
+
+      const auto nodeLen = nodeFSize / sizeof(unsigned int);
+      auto nodeCursor = (unsigned int*)nodeFile;
+      auto edgeCursor = (unsigned int*)edgeFile;
+      unsigned int maxVertex = 0;
+
+      while (nodeCursor < (unsigned int*)nodeFile + nodeLen)
       {
-        if (line[0] == '#')
-          continue;
-        std::stringstream ss(line);
-        unsigned int src, dest;
-        ss >> src;
-        ss >> dest;
+        unsigned int src, numEdges;
+        src = *nodeCursor++;
+        numEdges = *nodeCursor++;
 
-        // Assumes input is a directed graph, so convert to undirected
-        if (src != dest)
+        maxVertex = std::max(src, maxVertex);
+
+        for (int i = 0; i < numEdges; i++)
         {
-          arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, dest));
-          arrProxy[CHUNKINDEX(dest)].addEdge(std::make_pair(dest, src));
+          unsigned int dest = *edgeCursor++;
+          if (dest != src)
+          {
+            maxVertex = std::max(dest, maxVertex);
+            CmiEnforce(dest < numVertices && src < numVertices);
+            arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, dest));
+            arrProxy[CHUNKINDEX(dest)].addEdge(std::make_pair(dest, src));
+          }
         }
       }
+      munmap((void*)nodeFile, nodeFSize);
+      munmap((void*)edgeFile, edgeFSize);
+      close(nodeFd);
+      close(edgeFd);
 
-      CkPrintf("Done adding edges\n");
+      CkPrintf("Done adding edges, found %d vertices\n", maxVertex + 1);
       CkCallback initCB(CkIndex_Main::initDone(), thisProxy);
       CkStartQD(initCB);
     };
