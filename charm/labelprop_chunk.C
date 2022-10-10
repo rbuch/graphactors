@@ -212,6 +212,8 @@ class Graph : public CBase_Graph
       }
       else
       {
+        std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
+        outgoing.resize(numChunks);
         for (int i = 0; i < fresh.size(); i++)
         {
           if (fresh[i])
@@ -221,10 +223,19 @@ class Graph : public CBase_Graph
               if (CHUNKINDEX(dest) == thisIndex)
                 propagate(std::make_pair(dest, labels[i]));
               else
-                thisProxy[CHUNKINDEX(dest)].propagate(std::make_pair(dest, labels[i]));
+              {
+                const auto pair = std::make_pair(dest, labels[i]);
+                outgoing[CHUNKINDEX(dest)].push_back(pair);
+              }
             }
           }
         }
+
+        for (int i = 0; i < outgoing.size(); i++)
+        {
+          thisProxy[i].propagateBatch(outgoing[i]);
+        }
+
         if (thisIndex == 0)
         {
           CkCallback cb(CkIndex_Graph::update(), thisProxy);
@@ -241,6 +252,20 @@ class Graph : public CBase_Graph
       if (newLabel < labels[dest - base])
       {
         labels[dest - base] = newLabel;
+      }
+    }
+
+    void propagateBatch(std::vector<std::pair<unsigned int, unsigned int>> candidates)
+    {
+      for (const auto& candidate : candidates)
+      {
+        const auto dest = candidate.first;
+        const auto newLabel = candidate.second;
+
+        if (newLabel < labels[dest - base])
+        {
+          labels[dest - base] = newLabel;
+        }
       }
     }
 };
