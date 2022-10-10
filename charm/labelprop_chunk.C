@@ -121,7 +121,7 @@ class Main : public CBase_Main
 class Graph : public CBase_Graph
 {
   private:
-    std::vector<std::set<unsigned int>> edges;
+    std::vector<std::vector<unsigned int>> edges;
     std::vector<unsigned int> labels;
     std::vector<unsigned int> oldLabels;
     std::vector<bool> fresh;
@@ -159,14 +159,19 @@ class Graph : public CBase_Graph
       const auto src = edge.first;
       const auto dest = edge.second;
 
-      edges[src - base].insert(dest);
+      auto& edgeVec = edges[src - base];
+
+      // Only add destination if it's not already in the vector
+      const auto result = std::find(edgeVec.begin(), edgeVec.end(), dest);
+      if (result == edgeVec.end())
+        edgeVec.emplace_back(dest);
     }
 
     void getEdgeCount(CkCallback cb)
     {
       unsigned int count = 0;
-      for (const auto& edgeSet : edges)
-        count += edgeSet.size();
+      for (const auto& edgeVec : edges)
+        count += edgeVec.size();
       contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
     }
 
