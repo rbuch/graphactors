@@ -1,6 +1,6 @@
 CHARMC?=../../../../bin/charmc
 
-OPTS=-O3 -march=native
+OPTS?=-O3 -march=native
 
 all: pagerank labelprop labelprop_chunk
 
