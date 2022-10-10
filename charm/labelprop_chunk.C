@@ -94,8 +94,8 @@ class Main : public CBase_Main
       int nodeFd, edgeFd;
       size_t nodeFSize, edgeFSize;
 
-      std::tie(nodeFile, nodeFd, nodeFSize) = mapFile(p.replace_extension(".nodes"));
-      std::tie(edgeFile, edgeFd, edgeFSize) = mapFile(p.replace_extension(".edges"));
+      std::tie(nodeFile, nodeFd, nodeFSize) = mapFile(p.replace_extension(".binodes"));
+      std::tie(edgeFile, edgeFd, edgeFSize) = mapFile(p.replace_extension(".biedges"));
 
       const auto nodeLen = nodeFSize / sizeof(unsigned int);
       auto nodeCursor = (unsigned int*)nodeFile;
@@ -118,7 +118,6 @@ class Main : public CBase_Main
             maxVertex = std::max(dest, maxVertex);
             CmiEnforce(dest < numVertices && src < numVertices);
             arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, dest));
-            arrProxy[CHUNKINDEX(dest)].addEdge(std::make_pair(dest, src));
           }
         }
       }
