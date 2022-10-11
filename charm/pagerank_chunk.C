@@ -228,12 +228,13 @@ class Graph : public CBase_Graph
       outgoing.resize(numChunks);
       for (int i = 0; i < edges.size(); i++)
       {
+        const auto curB = b[i];
         for (const auto dest : edges[i])
         {
-          if (CHUNKINDEX(dest) != thisIndex)
-            outgoing[CHUNKINDEX(dest)].push_back(std::make_pair(dest, b[i]));
+          if (numChunks > 1 && CHUNKINDEX(dest) != thisIndex)
+            outgoing[CHUNKINDEX(dest)].push_back(std::make_pair(dest, curB));
           else
-            addB(std::make_pair(dest, b[i]));
+            addB(std::make_pair(dest, curB));
         }
       }
 
