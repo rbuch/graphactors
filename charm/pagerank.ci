@@ -4,15 +4,18 @@ mainmodule pagerank {
   mainchare Main {
     entry Main(CkArgMsg *m);
     entry void initDone(void);
-    entry [reductiontarget] void done(void);
+    entry [reductiontarget] void startComputation(unsigned int count);
+    entry [reductiontarget] void done(float maxVal);
   };
 
   array [1D] Graph {
     entry Graph(void);
     entry void addEdge(int dest);
+    entry void getEdgeCount(CkCallback cb);
     entry [threaded] void runpagerank(float alpha, int iters);
     entry void update(float alpha);
     entry void iterate();
     entry void addB(float b_in);
+    entry void returnResults();
   };        	
 };

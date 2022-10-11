@@ -73,13 +73,19 @@ public:
 
   void initDone(void)
   {
-    CkPrintf("Graph created!\n");
+    CkCallback cb(CkReductionTarget(Main, startComputation), thisProxy);
+    arrProxy.getEdgeCount(cb);
+  }
+
+  void startComputation(unsigned int count)
+  {
+    CkPrintf("Graph created, %d total edges\n", count);
     arrProxy[0].runpagerank(0.85, 20);
   }
 
-  void done(void)
+  void done(float maxVal)
   {
-    CkPrintf("All done\n");
+    CkPrintf("All done, Max Val: %f\n", maxVal);
     CkExit();
   };
 };
@@ -103,9 +109,15 @@ public:
     d++;
   }
 
+    void getEdgeCount(CkCallback cb)
+    {
+      unsigned int count = edges.size();
+      contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
+    }
+
   void runpagerank(float alpha, int iters)
   {
-      const auto start = CkWallTimer();
+    const auto start = CkWallTimer();
     for (int i = 0; i < iters; i++)
     {
       thisProxy.update(alpha);
@@ -116,7 +128,7 @@ public:
       CkPrintf("Iteration %d:\t%f\n", i, elapsed);
     }
 
-    mainProxy.done();
+    thisProxy.returnResults();
   }
 
   void update(float alpha)
@@ -134,6 +146,14 @@ public:
   }
 
   void addB(float b_in) { a += b_in; }
+
+  void returnResults()
+  {
+    CkCallback cb(CkReductionTarget(Main, done), mainProxy);
+    const float max = a;
+    contribute(sizeof(float), &max, CkReduction::max_float, cb);
+  }
+
 };
 
 #include "pagerank.def.h"
