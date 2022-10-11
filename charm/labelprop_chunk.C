@@ -110,6 +110,9 @@ class Main : public CBase_Main
 
         maxVertex = std::max(src, maxVertex);
 
+        std::vector<unsigned int> edges;
+        edges.reserve(numEdges);
+
         for (int i = 0; i < numEdges; i++)
         {
           unsigned int dest = *edgeCursor++;
@@ -117,9 +120,11 @@ class Main : public CBase_Main
           {
             maxVertex = std::max(dest, maxVertex);
             CmiEnforce(dest < numVertices && src < numVertices);
-            arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, dest));
+            edges.push_back(dest);
           }
         }
+
+        arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, edges));
       }
       munmap((void*)nodeFile, nodeFSize);
       munmap((void*)edgeFile, edgeFSize);
@@ -190,17 +195,12 @@ class Graph : public CBase_Graph
 
     Graph(CkMigrateMessage* m) {}
 
-    void addEdge(std::pair<unsigned int, unsigned int> edge)
+    void addEdge(std::pair<unsigned int, std::vector<unsigned int>> edgePair)
     {
-      const auto src = edge.first;
-      const auto dest = edge.second;
+      const auto src = edgePair.first;
+      const auto dests = edgePair.second;
 
-      auto& edgeVec = edges[src - base];
-
-      // Only add destination if it's not already in the vector
-      const auto result = std::find(edgeVec.begin(), edgeVec.end(), dest);
-      if (result == edgeVec.end())
-        edgeVec.emplace_back(dest);
+      edges[src - base] = dests;
     }
 
     void getEdgeCount(CkCallback cb)

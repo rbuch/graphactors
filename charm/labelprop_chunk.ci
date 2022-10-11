@@ -12,7 +12,7 @@ mainmodule labelprop_chunk {
 
   array [1D] Graph {
     entry Graph(int numVertices, int numElements);
-    entry [aggregate] void addEdge(std::pair<unsigned int, unsigned int> edge);
+    entry void addEdge(std::pair<unsigned int, std::vector<unsigned int>> edges);
     entry void getEdgeCount(CkCallback cb);
     entry void runlabelprop();
     entry void update();
