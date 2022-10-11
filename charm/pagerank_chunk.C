@@ -245,14 +245,14 @@ class Graph : public CBase_Graph
       }
     }
 
-    void addB(std::pair<unsigned int, float> b_in)
+    void addB(const std::pair<unsigned int, float> b_in)
     {
       const auto dest = b_in.first;
       const auto value = b_in.second;
       a[dest - base] += value;
     }
 
-    void addB(std::vector<std::pair<unsigned int, float>> b_in)
+    void addB(const std::vector<std::pair<unsigned int, float>> b_in)
     {
       for (const auto& entry : b_in)
       {
