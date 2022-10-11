@@ -53,6 +53,7 @@ public:
     mainProxy = thisProxy;
     arrProxy = CProxy_Graph::ckNew(max);
 
+    infile.clear();
     infile.seekg(0);
 
     while (std::getline(infile, line))
