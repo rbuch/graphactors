@@ -2,9 +2,12 @@ CHARMC?=../../../../bin/charmc
 
 OPTS?=-O3 -march=native
 
-all: pagerank labelprop labelprop_chunk
+all: pagerank pagerank_chunk labelprop labelprop_chunk
 
 pagerank: pagerank.o
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
+
+pagerank_chunk: pagerank_chunk.o
 	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
 
 labelprop: labelprop.o
@@ -16,6 +19,9 @@ labelprop_chunk: labelprop_chunk.o
 pagerank.decl.h: pagerank.ci
 	$(CHARMC) $(OPTS)  $^
 
+pagerank_chunk.decl.h: pagerank_chunk.ci
+	$(CHARMC) $(OPTS)  $^
+
 labelprop.decl.h: labelprop.ci
 	$(CHARMC) $(OPTS)  $^
 
@@ -23,9 +29,12 @@ labelprop_chunk.decl.h: labelprop_chunk.ci
 	$(CHARMC) $(OPTS)  $^
 
 clean:
-	rm -f *.decl.h *.def.h conv-host *.o labelprop labelprop_chunk pagerank charmrun
+	rm -f *.decl.h *.def.h conv-host *.o labelprop labelprop_chunk pagerank pagerank_chunk charmrun
 
 pagerank.o: pagerank.C pagerank.decl.h
+	$(CHARMC) $(OPTS) -c $<
+
+pagerank_chunk.o: pagerank_chunk.C pagerank_chunk.decl.h
 	$(CHARMC) $(OPTS) -c $<
 
 labelprop.o: labelprop.C labelprop.decl.h

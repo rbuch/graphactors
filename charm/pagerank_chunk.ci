@@ -1,0 +1,23 @@
+mainmodule pagerank_chunk {
+  readonly CProxy_Main mainProxy;
+  readonly unsigned int numChunks;
+  readonly unsigned int verticesPerChunk;
+
+  mainchare Main {
+    entry Main(CkArgMsg *m);
+    entry void initDone(void);
+    entry [reductiontarget] void startComputation(unsigned int count);
+    entry [reductiontarget] void done(float maxVal);
+  };
+
+  array [1D] Graph {
+    entry Graph(int numVertices, int numElements);
+    entry void addEdge(std::pair<unsigned int, std::vector<unsigned int>> edges);
+    entry void getEdgeCount(CkCallback cb);
+    entry [threaded] void runpagerank(float alpha, int iters);
+    entry void update(float alpha);
+    entry void iterate();
+    entry void addB(std::vector<std::pair<unsigned int, float>> b_in);
+    entry void returnResults();
+  };
+};
