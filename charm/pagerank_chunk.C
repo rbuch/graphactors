@@ -1,4 +1,5 @@
 #include "pagerank_chunk.decl.h"
+#include <iterator>
 #include <stdio.h>
 
 #include <fstream>
@@ -161,6 +162,9 @@ class Graph : public CBase_Graph
     std::vector<std::vector<unsigned int>> edges;
     std::vector<float> a, b;
 
+    std::vector<unsigned int> vertexDegs;
+    std::vector<unsigned int> compressedEdges;
+
     unsigned int base;
 
   public:
@@ -191,9 +195,22 @@ class Graph : public CBase_Graph
 
     void getEdgeCount(CkCallback cb)
     {
-      unsigned int count = 0;
-      for (const auto& edgeVec : edges)
-        count += edgeVec.size();
+      vertexDegs.reserve(edges.size());
+      for (int i = 0; i < edges.size(); i++)
+      {
+        // Pack the edge data into a single vector, vertexDegs[i] is the out
+        // degree of vertex base + i, or the number of edges in compressedEdges
+        // corresponding to it. Doing this greatly speeds up iterate()
+        vertexDegs.emplace_back(edges[i].size());
+        compressedEdges.insert(compressedEdges.end(),
+                               std::make_move_iterator(edges[i].begin()),
+                               std::make_move_iterator(edges[i].end()));
+        edges[i].clear();
+      }
+
+      edges.clear();
+
+      unsigned int count = compressedEdges.size();
       contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
     }
 
@@ -215,9 +232,9 @@ class Graph : public CBase_Graph
 
     void update(float alpha)
     {
-      for (int i = 0; i < edges.size(); i++)
+      for (int i = 0; i < vertexDegs.size(); i++)
       {
-       b[i] = alpha * a[i] / edges[i].size();
+       b[i] = alpha * a[i] / vertexDegs[i];
        a[i] = 1 - alpha;
       }
     }
@@ -226,11 +243,13 @@ class Graph : public CBase_Graph
     {
       std::vector<std::vector<std::pair<unsigned int, float>>> outgoing;
       outgoing.resize(numChunks);
-      for (int i = 0; i < edges.size(); i++)
+      auto edgeIt = compressedEdges.begin();
+      for (int i = 0; i < vertexDegs.size(); i++)
       {
         const auto curB = b[i];
-        for (const auto dest : edges[i])
+        for (int j = 0; j < vertexDegs[i]; j++)
         {
+          const auto dest = *edgeIt++;
           if (numChunks > 1 && CHUNKINDEX(dest) != thisIndex)
             outgoing[CHUNKINDEX(dest)].push_back(std::make_pair(dest, curB));
           else
@@ -238,7 +257,7 @@ class Graph : public CBase_Graph
         }
       }
 
-      for (int i = 0; i < numChunks; i++)
+      for (int i = 0; i < outgoing.size(); i++)
       {
         if (!outgoing[i].empty())
           thisProxy[i].addB(outgoing[i]);
