@@ -167,6 +167,8 @@ class Graph : public CBase_Graph
 
     unsigned int base;
 
+    std::vector<std::vector<std::pair<unsigned int, float>>> outgoing;
+
   public:
     Graph(int numVertices, int numElements)
         : base(thisIndex * (numVertices / numElements)) {
@@ -176,6 +178,8 @@ class Graph : public CBase_Graph
         edges.resize(numVertices / numElements + (numVertices % numElements));
       else
         edges.resize(numVertices / numElements);
+
+      outgoing.resize(numElements);
 
       a.resize(edges.size());
       std::fill(a.begin(), a.end(), 0);
@@ -241,8 +245,6 @@ class Graph : public CBase_Graph
 
     void iterate()
     {
-      std::vector<std::vector<std::pair<unsigned int, float>>> outgoing;
-      outgoing.resize(numChunks);
       auto edgeIt = compressedEdges.begin();
       for (int i = 0; i < vertexDegs.size(); i++)
       {
@@ -260,7 +262,10 @@ class Graph : public CBase_Graph
       for (int i = 0; i < outgoing.size(); i++)
       {
         if (!outgoing[i].empty())
+        {
           thisProxy[i].addB(outgoing[i]);
+          outgoing[i].clear();
+        }
       }
     }
 
