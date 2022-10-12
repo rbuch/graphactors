@@ -185,9 +185,26 @@ class Graph : public CBase_Graph
       std::fill(a.begin(), a.end(), 0);
       b.resize(edges.size());
       std::fill(b.begin(), b.end(), 0);
+
+      usesAtSync = true;
+      // Don't migrate index 0 since the threaded runpagerank EP shouldn't move
+      if (thisIndex == 0)
+        setMigratable(false);
     }
 
     Graph(CkMigrateMessage* m) {}
+
+    void pup(PUP::er &p)
+    {
+      p | vertexDegs;
+      p | compressedEdges;
+      p | a;
+      p | b;
+      p | base;
+
+      if (p.isUnpacking())
+        outgoing.resize(numChunks);
+    }
 
     void addEdge(std::pair<unsigned int, std::vector<unsigned int>> edgePair)
     {
@@ -229,6 +246,11 @@ class Graph : public CBase_Graph
         CkWaitQD();
         const auto elapsed = CkWallTimer() - start;
         CkPrintf("Iteration %d:\t%f\n", i, elapsed);
+        if (i == 0)
+        {
+          thisProxy.callAtSync();
+          CkWaitQD();
+        }
       }
 
       thisProxy.returnResults();
@@ -289,6 +311,11 @@ class Graph : public CBase_Graph
       CkCallback cb(CkReductionTarget(Main, done), mainProxy);
       const float max = *std::max_element(a.begin(), a.end());
       contribute(sizeof(float), &max, CkReduction::max_float, cb);
+    }
+
+    void callAtSync()
+    {
+      AtSync();
     }
 };
 

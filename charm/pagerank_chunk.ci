@@ -19,5 +19,6 @@ mainmodule pagerank_chunk {
     entry void iterate();
     entry [inline] void addB(std::vector<std::pair<unsigned int, float>> b_in);
     entry void returnResults();
+    entry void callAtSync();
   };
 };
