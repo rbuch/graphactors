@@ -150,7 +150,7 @@ class Main : public CBase_Main
     void done(float maxVal)
     {
       const auto end = CkWallTimer();
-      CkPrintf("All done, Max Val: %f\n", maxVal);
+      CkPrintf("Finished in %fs, maxVal: %f\n", end - start, maxVal);
       CkExit();
     };
 };
