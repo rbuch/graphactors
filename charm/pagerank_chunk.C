@@ -88,7 +88,7 @@ class Main : public CBase_Main
                numChunks, CkNumPes(), numVertices);
       mainProxy = thisProxy;
       arrProxy = CProxy_Graph::ckNew(numVertices, numChunks, numChunks);
-      updateStoreProxy = CProxy_UpdateStore::ckNew(numChunks);
+      updateStoreProxy = CProxy_UpdateStore::ckNew(numVertices);
 
 
       std::filesystem::path p(m->argv[1]);
@@ -180,15 +180,13 @@ class Main : public CBase_Main
 class UpdateStore : public CBase_UpdateStore
 {
   public:
-    std::vector<std::vector<std::vector<std::pair<unsigned int, float>>>> updates;
+    //std::vector<std::vector<std::vector<std::pair<unsigned int, float>>>> updates;
+    std::vector<std::atomic<float>> updates;
 
-    UpdateStore(int numChunks)
+    UpdateStore(int numVertices) : updates(numVertices)
     {
-      updates.resize(numChunks);
-      for (auto& chunkUpdates : updates)
-      {
-        chunkUpdates.resize(numChunks);
-      }
+      for(auto& entry : updates)
+        entry.store(0, std::memory_order_relaxed);
     }
 };
 
@@ -265,6 +263,8 @@ class Graph : public CBase_Graph
         CkWaitQD();
         thisProxy.iterate();
         CkWaitQD();
+        thisProxy.addB();
+        CkWaitQD();
         const auto elapsed = CkWallTimer() - start;
         CkPrintf("Iteration %d:\t%f\n", i, elapsed);
         if (i == 0)
@@ -284,12 +284,20 @@ class Graph : public CBase_Graph
        b[i] = alpha * a[i] / vertexDegs[i];
        a[i] = 1 - alpha;
       }
+
+      // UpdateStore* store = updateStoreProxy.ckLocalBranch();
+      // auto& updates = store.updates;
+      // for (int i = base; i < base + vertexDegs.size(); i++)
+      // {
+      //   updates[i].store(0, std::memory_order_relaxed);
+      // }
     }
 
     void iterate()
     {
       UpdateStore* store = updateStoreProxy.ckLocalBranch();
-      auto& outgoing = store->updates[thisIndex];
+      auto& updates = store->updates;
+
       auto edgeIt = compressedEdges.begin();
       for (int i = 0; i < vertexDegs.size(); i++)
       {
@@ -297,47 +305,20 @@ class Graph : public CBase_Graph
         for (int j = 0; j < vertexDegs[i]; j++)
         {
           const auto dest = *edgeIt++;
-          if (numChunks > 1)
-            outgoing[CHUNKINDEX(dest)].push_back(std::make_pair(dest, curB));
-          else
-            addB(std::make_pair(dest, curB));
-        }
-      }
-
-      for (int i = 0; i < outgoing.size(); i++)
-      {
-        if (!outgoing[i].empty())
-        {
-          thisProxy[i].addB(thisIndex);
+          //std::atomic_fetch_add(&(updates[dest]), curB), std::memory_order_relaxed);
+          (&updates[dest])->fetch_add(curB, std::memory_order_relaxed);
         }
       }
     }
 
-    void addB(int incomingIndex)
+    void addB()
     {
       UpdateStore* store = updateStoreProxy.ckLocalBranch();
-      auto& updates = store->updates[incomingIndex][thisIndex];
-
-      for (const auto& entry : updates)
+      auto& updates = store->updates;
+      for (int i = base; i < base + vertexDegs.size(); i++)
       {
-        addB(entry);
-      }
-
-      updates.clear();
-    }
-
-    void addB(const std::pair<unsigned int, float> b_in)
-    {
-      const auto dest = b_in.first;
-      const auto value = b_in.second;
-      a[dest - base] += value;
-    }
-
-    void addB(const std::vector<std::pair<unsigned int, float>> b_in)
-    {
-      for (const auto& entry : b_in)
-      {
-        addB(entry);
+        const float update = updates[i].exchange(0, std::memory_order_relaxed);
+        a[i - base] += update;
       }
     }
 

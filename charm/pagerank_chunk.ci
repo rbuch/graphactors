@@ -22,8 +22,7 @@ mainmodule pagerank_chunk {
     entry [threaded] void runpagerank(float alpha, int iters);
     entry void update(float alpha);
     entry void iterate();
-    entry void addB(int incomingIndex);
-    entry [inline] void addB(std::vector<std::pair<unsigned int, float>> b_in);
+    entry void addB();
     entry void returnResults();
     entry void callAtSync();
   };
