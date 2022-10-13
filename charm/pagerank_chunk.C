@@ -316,7 +316,14 @@ class Graph : public CBase_Graph
       for (int i = 0; i < localUpdates.size(); i++)
       {
         if (localUpdates[i] > 0)
-          (&updates[i])->fetch_add(localUpdates[i], std::memory_order_relaxed);
+	  {
+	    float old = updates[i];
+	    float desired;
+	    do {
+	      desired = old + localUpdates[i];
+	    } while (!(&updates[i])->compare_exchange_weak(old, desired, std::memory_order_relaxed));
+	    //(&updates[i])->fetch_add(localUpdates[i], std::memory_order_relaxed);
+	  }
       }
     }
 
