@@ -5,16 +5,16 @@ OPTS?=-O3 -march=native
 all: pagerank pagerank_chunk labelprop labelprop_chunk
 
 pagerank: pagerank.o
-	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^ -module CommonLBs
 
 pagerank_chunk: pagerank_chunk.o
-	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^ -module CommonLBs
 
 labelprop: labelprop.o
-	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^ -module CommonLBs
 
 labelprop_chunk: labelprop_chunk.o
-	$(CHARMC) $(OPTS) -language charm++ -o $@ $^
+	$(CHARMC) $(OPTS) -language charm++ -o $@ $^ -module CommonLBs
 
 pagerank.decl.h: pagerank.ci
 	$(CHARMC) $(OPTS)  $^
