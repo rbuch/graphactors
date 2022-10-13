@@ -3,6 +3,7 @@ mainmodule pagerank_chunk {
   readonly CProxy_UpdateStore updateStoreProxy;
   readonly unsigned int numChunks;
   readonly unsigned int verticesPerChunk;
+  readonly unsigned int numVertices;
 
   mainchare Main {
     entry Main(CkArgMsg *m);
