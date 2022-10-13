@@ -22,6 +22,7 @@
 /*readonly*/ CProxy_UpdateStore updateStoreProxy;
 /*readonly*/ unsigned int numChunks;
 /*readonly*/ unsigned int verticesPerChunk;
+/*readonly*/ unsigned int numVertices;
 
 #define CHUNKINDEX(X) (std::min(numChunks - 1, X / verticesPerChunk))
 
@@ -76,7 +77,7 @@ class Main : public CBase_Main
         CkPrintf("No chares per PE argument provided, defaulting to 1!\n");
       }
 
-      unsigned int numVertices = std::stoul(m->argv[2]);
+      numVertices = std::stoul(m->argv[2]);
 
       const unsigned int chunksPerPE = (m->argc <= 3) ? 1 : std::stoul(m->argv[3]);
       numChunks = chunksPerPE * CkNumPes();
@@ -298,6 +299,8 @@ class Graph : public CBase_Graph
       UpdateStore* store = updateStoreProxy.ckLocalBranch();
       auto& updates = store->updates;
 
+      std::vector<float> localUpdates(numVertices, 0);
+
       auto edgeIt = compressedEdges.begin();
       for (int i = 0; i < vertexDegs.size(); i++)
       {
@@ -305,9 +308,15 @@ class Graph : public CBase_Graph
         for (int j = 0; j < vertexDegs[i]; j++)
         {
           const auto dest = *edgeIt++;
-          //std::atomic_fetch_add(&(updates[dest]), curB), std::memory_order_relaxed);
-          (&updates[dest])->fetch_add(curB, std::memory_order_relaxed);
+          //(&updates[dest])->fetch_add(curB, std::memory_order_relaxed);
+          localUpdates[dest] += curB;
         }
+      }
+
+      for (int i = 0; i < localUpdates.size(); i++)
+      {
+        if (localUpdates[i] > 0)
+          (&updates[i])->fetch_add(localUpdates[i], std::memory_order_relaxed);
       }
     }
 
