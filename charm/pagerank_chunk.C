@@ -19,6 +19,7 @@
 #include <tuple>
 
 /*readonly*/ CProxy_Main mainProxy;
+/*readonly*/ CProxy_UpdateStore updateStoreProxy;
 /*readonly*/ unsigned int numChunks;
 /*readonly*/ unsigned int verticesPerChunk;
 
@@ -87,6 +88,7 @@ class Main : public CBase_Main
                numChunks, CkNumPes(), numVertices);
       mainProxy = thisProxy;
       arrProxy = CProxy_Graph::ckNew(numVertices, numChunks, numChunks);
+      updateStoreProxy = CProxy_UpdateStore::ckNew(numChunks);
 
 
       std::filesystem::path p(m->argv[1]);
@@ -173,6 +175,21 @@ class Main : public CBase_Main
       CkPrintf("Finished in %fs, maxVal: %f\n", end - start, maxVal);
       CkExit();
     };
+};
+
+class UpdateStore : public CBase_UpdateStore
+{
+  public:
+    std::vector<std::vector<std::vector<std::pair<unsigned int, float>>>> updates;
+
+    UpdateStore(int numChunks)
+    {
+      updates.resize(numChunks);
+      for (auto& chunkUpdates : updates)
+      {
+        chunkUpdates.resize(numChunks);
+      }
+    }
 };
 
 /*array [1D]*/
@@ -271,6 +288,8 @@ class Graph : public CBase_Graph
 
     void iterate()
     {
+      UpdateStore* store = updateStoreProxy.ckLocalBranch();
+      auto& outgoing = store->updates[thisIndex];
       auto edgeIt = compressedEdges.begin();
       for (int i = 0; i < vertexDegs.size(); i++)
       {
@@ -278,7 +297,7 @@ class Graph : public CBase_Graph
         for (int j = 0; j < vertexDegs[i]; j++)
         {
           const auto dest = *edgeIt++;
-          if (numChunks > 1 && CHUNKINDEX(dest) != thisIndex)
+          if (numChunks > 1)
             outgoing[CHUNKINDEX(dest)].push_back(std::make_pair(dest, curB));
           else
             addB(std::make_pair(dest, curB));
@@ -289,10 +308,22 @@ class Graph : public CBase_Graph
       {
         if (!outgoing[i].empty())
         {
-          thisProxy[i].addB(outgoing[i]);
-          outgoing[i].clear();
+          thisProxy[i].addB(thisIndex);
         }
       }
+    }
+
+    void addB(int incomingIndex)
+    {
+      UpdateStore* store = updateStoreProxy.ckLocalBranch();
+      auto& updates = store->updates[incomingIndex][thisIndex];
+
+      for (const auto& entry : updates)
+      {
+        addB(entry);
+      }
+
+      updates.clear();
     }
 
     void addB(const std::pair<unsigned int, float> b_in)

@@ -1,5 +1,6 @@
 mainmodule pagerank_chunk {
   readonly CProxy_Main mainProxy;
+  readonly CProxy_UpdateStore updateStoreProxy;
   readonly unsigned int numChunks;
   readonly unsigned int verticesPerChunk;
 
@@ -10,6 +11,10 @@ mainmodule pagerank_chunk {
     entry [reductiontarget] void done(float maxVal);
   };
 
+  nodegroup UpdateStore {
+    entry UpdateStore(int numChunks);
+  }
+
   array [1D] Graph {
     entry Graph(int numVertices, int numElements);
     entry [inline] void addAllEdges(std::vector<unsigned int> degs, std::vector<unsigned int> dests);
@@ -17,6 +22,7 @@ mainmodule pagerank_chunk {
     entry [threaded] void runpagerank(float alpha, int iters);
     entry void update(float alpha);
     entry void iterate();
+    entry void addB(int incomingIndex);
     entry [inline] void addB(std::vector<std::pair<unsigned int, float>> b_in);
     entry void returnResults();
     entry void callAtSync();
