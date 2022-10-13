@@ -75,14 +75,14 @@ class Main : public CBase_Main
         CkPrintf("No chares per PE argument provided, defaulting to 1!\n");
       }
 
-      unsigned int numVertices = std::stoi(m->argv[2]);
+      unsigned int numVertices = std::stoul(m->argv[2]);
 
-      const auto chunksPerPE = (m->argc <= 3) ? 1 : std::stoi(m->argv[3]);
+      const unsigned int chunksPerPE = (m->argc <= 3) ? 1 : std::stoul(m->argv[3]);
       numChunks = chunksPerPE * CkNumPes();
 
       verticesPerChunk = numVertices / numChunks;
 
-      CkPrintf("Running pagerank_chunk on with %d chunks, %d processors, %d "
+      CkPrintf("Running pagerank_chunk on with %u chunks, %d processors, %u "
                "vertices\n",
                numChunks, CkNumPes(), numVertices);
       mainProxy = thisProxy;
@@ -129,7 +129,7 @@ class Main : public CBase_Main
       close(nodeFd);
       close(edgeFd);
 
-      CkPrintf("Done adding edges, found %d vertices\n", maxVertex + 1);
+      CkPrintf("Done adding edges, found %u vertices\n", maxVertex + 1);
       CkCallback initCB(CkIndex_Main::initDone(), thisProxy);
       CkStartQD(initCB);
     };
@@ -142,7 +142,7 @@ class Main : public CBase_Main
 
     void startComputation(unsigned int count)
     {
-      CkPrintf("Graph created, %d total edges\n", count);
+      CkPrintf("Graph created, %u total edges\n", count);
       start = CkWallTimer();
       arrProxy[0].runpagerank(0.85, 20);
     }
