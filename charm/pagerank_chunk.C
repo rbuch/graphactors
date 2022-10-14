@@ -218,6 +218,7 @@ class Graph : public CBase_Graph
     void pup(PUP::er &p)
     {
       p | vertexDegs;
+      p | dests;
       p | compressedEdges;
       p | a;
       p | b;
