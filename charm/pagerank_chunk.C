@@ -117,7 +117,7 @@ class Main : public CBase_Main
         const unsigned int chunk = CHUNKINDEX(src);
         if (chunk != curChunk)
         {
-          arrProxy[curChunk].addAllEdges(curDegs, curDests);
+          arrProxy[curChunk].addAllEdges(std::move(curDegs), std::move(curDests));
           curDegs.clear();
           curDests.clear();
           curChunk = chunk;
