@@ -318,14 +318,17 @@ class Graph : public CBase_Graph
           curChunk = chunk;
         }
 
+        float destB = 0;
         for (int j = 0; j < inDeg; j++)
         {
           const auto src = *edgeIt++;
-          if (numChunks > 1 && chunk != thisIndex)
-            outgoing[chunk].push_back(std::make_pair(dest, b[src - base]));
-          else
-            addB(std::make_pair(dest, b[src - base]));
+          destB += b[src - base];
         }
+        if (numChunks > 1 && chunk != thisIndex)
+          outgoing[chunk].push_back(std::make_pair(dest, destB));
+        else
+          addB(std::make_pair(dest, destB));
+
       }
 
       if (!outgoing[curChunk].empty())
