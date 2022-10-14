@@ -112,6 +112,8 @@ class Main : public CBase_Main
         CmiEnforce(src < numVertices);
         numEdges = *nodeCursor++;
 
+        maxVertex = std::max(maxVertex, src);
+
         const unsigned int chunk = CHUNKINDEX(src);
         if (chunk != curChunk)
         {
@@ -131,6 +133,7 @@ class Main : public CBase_Main
           const unsigned int dest = *edgeCursor++;
           CmiEnforce(dest < numVertices);
           curDests.push_back(dest);
+          maxVertex = std::max(maxVertex, dest);
         }
       }
 
