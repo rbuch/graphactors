@@ -12,7 +12,7 @@ mainmodule pagerank_chunk {
 
   array [1D] Graph {
     entry Graph(int numVertices, int numElements);
-    entry void addAllEdges(std::vector<unsigned int> degs, std::vector<unsigned int> dests);
+    entry [inline] void addAllEdges(std::vector<unsigned int> degs, std::vector<unsigned int> dests);
     entry void getEdgeCount(CkCallback cb);
     entry [threaded] void runpagerank(float alpha, int iters);
     entry void update(float alpha);
