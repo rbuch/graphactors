@@ -103,27 +103,44 @@ class Main : public CBase_Main
       auto edgeCursor = (unsigned int*)edgeFile;
       unsigned int maxVertex = 0;
 
+      std::vector<unsigned int> curDegs, curDests;
+      unsigned int curChunk = 0, curBase = 0;
       while (nodeCursor < (unsigned int*)nodeFile + nodeLen)
       {
         unsigned int src, numEdges;
         src = *nodeCursor++;
+        CmiEnforce(src < numVertices);
         numEdges = *nodeCursor++;
 
-        maxVertex = std::max(src, maxVertex);
+        const unsigned int chunk = CHUNKINDEX(src);
+        if (chunk != curChunk)
+        {
+          arrProxy[curChunk].addAllEdges(curDegs, curDests);
+          curDegs.clear();
+          curDests.clear();
+          curChunk = chunk;
+          curBase = chunk * verticesPerChunk;
+        }
 
-        std::vector<unsigned int> edges;
-        edges.reserve(numEdges);
+        if (curDegs.size() < src - curBase)
+          curDegs.resize(src - curBase);
+        curDegs.push_back(numEdges);
 
         for (int i = 0; i < numEdges; i++)
         {
-          unsigned int dest = *edgeCursor++;
-          maxVertex = std::max(dest, maxVertex);
-          CmiEnforce(dest < numVertices && src < numVertices);
-          edges.push_back(dest);
+          const unsigned int dest = *edgeCursor++;
+          CmiEnforce(dest < numVertices);
+          curDests.push_back(dest);
         }
-
-        arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, edges));
       }
+
+      if (!curDegs.empty())
+      {
+        arrProxy[curChunk].addAllEdges(curDegs, curDests);
+        curDegs.clear();
+        curDests.clear();
+      }
+
       munmap((void*)nodeFile, nodeFSize);
       munmap((void*)edgeFile, edgeFSize);
       close(nodeFd);
@@ -159,7 +176,6 @@ class Main : public CBase_Main
 class Graph : public CBase_Graph
 {
   private:
-    std::vector<std::vector<unsigned int>> edges;
     std::vector<float> a, b;
 
     std::vector<unsigned int> vertexDegs;
@@ -172,18 +188,19 @@ class Graph : public CBase_Graph
   public:
     Graph(int numVertices, int numElements)
         : base(thisIndex * (numVertices / numElements)) {
+      unsigned int numLocalVertices;
       CmiEnforce(numElements <= numVertices);
       // If this is the last chunk, fit the remainder in here
       if (thisIndex == numElements - 1)
-        edges.resize(numVertices / numElements + (numVertices % numElements));
+        numLocalVertices = numVertices / numElements + (numVertices % numElements);
       else
-        edges.resize(numVertices / numElements);
+        numLocalVertices = (numVertices / numElements);
 
       outgoing.resize(numElements);
 
-      a.resize(edges.size());
+      a.resize(numLocalVertices);
       std::fill(a.begin(), a.end(), 0);
-      b.resize(edges.size());
+      b.resize(numLocalVertices);
       std::fill(b.begin(), b.end(), 0);
 
       usesAtSync = true;
@@ -206,31 +223,15 @@ class Graph : public CBase_Graph
         outgoing.resize(numChunks);
     }
 
-    void addEdge(std::pair<unsigned int, std::vector<unsigned int>> edgePair)
+    void addAllEdges(std::vector<unsigned int> vertexDegs,
+                     std::vector<unsigned int> compressedEdges)
     {
-      const auto src = edgePair.first;
-      const auto dests = edgePair.second;
-
-      edges[src - base] = dests;
+      this->vertexDegs = std::move(vertexDegs);
+      this->compressedEdges = std::move(compressedEdges);
     }
 
     void getEdgeCount(CkCallback cb)
     {
-      vertexDegs.reserve(edges.size());
-      for (int i = 0; i < edges.size(); i++)
-      {
-        // Pack the edge data into a single vector, vertexDegs[i] is the out
-        // degree of vertex base + i, or the number of edges in compressedEdges
-        // corresponding to it. Doing this greatly speeds up iterate()
-        vertexDegs.emplace_back(edges[i].size());
-        compressedEdges.insert(compressedEdges.end(),
-                               std::make_move_iterator(edges[i].begin()),
-                               std::make_move_iterator(edges[i].end()));
-        edges[i].clear();
-      }
-
-      edges.clear();
-
       unsigned int count = compressedEdges.size();
       contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
     }
