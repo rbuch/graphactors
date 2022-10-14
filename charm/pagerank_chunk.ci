@@ -14,6 +14,7 @@ mainmodule pagerank_chunk {
 
   nodegroup UpdateStore {
     entry UpdateStore(int numChunks);
+    entry [reductiontarget] void recvUpdate(unsigned int n, float data[n]);
   }
 
   array [1D] Graph {

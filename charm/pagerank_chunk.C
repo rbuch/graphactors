@@ -182,12 +182,16 @@ class UpdateStore : public CBase_UpdateStore
 {
   public:
     //std::vector<std::vector<std::vector<std::pair<unsigned int, float>>>> updates;
-    std::vector<std::atomic<float>> updates;
+    std::vector<float> updates;
 
     UpdateStore(int numVertices) : updates(numVertices)
     {
-      for(auto& entry : updates)
-        entry.store(0, std::memory_order_relaxed);
+      std::fill(updates.begin(), updates.end(), 0);
+    }
+
+    void recvUpdate(unsigned int n, float* data)
+    {
+      std::copy(data, data + updates.size(), updates.begin());
     }
 };
 
@@ -313,27 +317,17 @@ class Graph : public CBase_Graph
         }
       }
 
-      for (int i = 0; i < localUpdates.size(); i++)
-      {
-        if (localUpdates[i] > 0)
-	  {
-	    float old = updates[i];
-	    float desired;
-	    do {
-	      desired = old + localUpdates[i];
-	    } while (!(&updates[i])->compare_exchange_weak(old, desired, std::memory_order_relaxed));
-	    //(&updates[i])->fetch_add(localUpdates[i], std::memory_order_relaxed);
-	  }
-      }
+      CkCallback cb(CkReductionTarget(UpdateStore, recvUpdate), updateStoreProxy);
+      contribute(sizeof(float) * localUpdates.size(), localUpdates.data(), CkReduction::sum_float, cb);
     }
 
     void addB()
     {
-      UpdateStore* store = updateStoreProxy.ckLocalBranch();
-      auto& updates = store->updates;
+      const UpdateStore* store = updateStoreProxy.ckLocalBranch();
+      const auto& updates = store->updates;
       for (int i = base; i < base + vertexDegs.size(); i++)
       {
-        const float update = updates[i].exchange(0, std::memory_order_relaxed);
+        const float update = updates[i];
         a[i - base] += update;
       }
     }
