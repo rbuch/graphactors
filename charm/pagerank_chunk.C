@@ -182,6 +182,7 @@ class Graph : public CBase_Graph
     std::vector<float> a, b;
 
     std::vector<unsigned int> vertexDegs;
+    std::vector<std::pair<unsigned int, unsigned int>> dests;
     std::vector<unsigned int> compressedEdges;
 
     unsigned int base;
@@ -230,7 +231,34 @@ class Graph : public CBase_Graph
                      std::vector<unsigned int> compressedEdges)
     {
       this->vertexDegs = std::move(vertexDegs);
-      this->compressedEdges = std::move(compressedEdges);
+      //this->compressedEdges = std::move(compressedEdges);
+
+      std::map<unsigned int, std::vector<unsigned int>> destToSrc;
+
+      auto edgeIt = compressedEdges.begin();
+      for (int i = 0; i < this->vertexDegs.size(); i++)
+      {
+        const auto src = i + base;
+        for (int j = 0; j < this->vertexDegs[i]; j++)
+        {
+          const auto dest = *edgeIt++;
+          if (destToSrc.count(dest) != 0)
+            destToSrc[dest].push_back(src);
+          else
+          {
+            destToSrc.insert({dest, {src}});
+            //destToSrc[dest].push_back(src);
+          }
+        }
+      }
+
+      for (auto it = destToSrc.begin(); it != destToSrc.end(); ++it) {
+        auto& dest = it->first;
+        auto& srcVec = it->second;
+        dests.emplace_back(dest, srcVec.size());
+        this->compressedEdges.insert(this->compressedEdges.end(), srcVec.begin(), srcVec.end());
+        srcVec.clear();
+      }
     }
 
     void getEdgeCount(CkCallback cb)
@@ -272,26 +300,37 @@ class Graph : public CBase_Graph
     void iterate()
     {
       auto edgeIt = compressedEdges.begin();
-      for (int i = 0; i < vertexDegs.size(); i++)
+      unsigned int curChunk = 0;
+      for (int i = 0; i < dests.size(); i++)
       {
-        const auto curB = b[i];
-        for (int j = 0; j < vertexDegs[i]; j++)
+        const auto dest = dests[i].first;
+        const auto inDeg = dests[i].second;
+        const auto chunk = CHUNKINDEX(dest);
+
+        if (chunk != curChunk)
         {
-          const auto dest = *edgeIt++;
-          if (numChunks > 1 && CHUNKINDEX(dest) != thisIndex)
-            outgoing[CHUNKINDEX(dest)].push_back(std::make_pair(dest, curB));
+          if (!outgoing[curChunk].empty())
+          {
+            thisProxy[curChunk].addB(outgoing[curChunk]);
+            outgoing[curChunk].clear();
+          }
+          curChunk = chunk;
+        }
+
+        for (int j = 0; j < inDeg; j++)
+        {
+          const auto src = *edgeIt++;
+          if (numChunks > 1 && chunk != thisIndex)
+            outgoing[chunk].push_back(std::make_pair(dest, b[src - base]));
           else
-            addB(std::make_pair(dest, curB));
+            addB(std::make_pair(dest, b[src - base]));
         }
       }
 
-      for (int i = 0; i < outgoing.size(); i++)
+      if (!outgoing[curChunk].empty())
       {
-        if (!outgoing[i].empty())
-        {
-          thisProxy[i].addB(outgoing[i]);
-          outgoing[i].clear();
-        }
+        thisProxy[curChunk].addB(outgoing[curChunk]);
+        outgoing[curChunk].clear();
       }
     }
 
