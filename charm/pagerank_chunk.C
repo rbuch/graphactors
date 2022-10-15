@@ -232,10 +232,40 @@ class Graph : public CBase_Graph
                      std::vector<unsigned int> compressedEdges)
     {
       this->vertexDegs = std::move(vertexDegs);
-      //this->compressedEdges = std::move(compressedEdges);
 
-      std::map<unsigned int, std::vector<unsigned int>> destToSrc;
+      std::unordered_map<unsigned int, unsigned int> destToSrc;
 
+      for (const auto& dest : compressedEdges)
+      {
+        auto it = destToSrc.find(dest);
+        if (it != destToSrc.end())
+          it->second += 1;
+        else
+        {
+          destToSrc.emplace(dest, 1);
+        }
+      }
+
+      // Convert the map into {dest, offset in array} by doing a prefix sum of
+      // the degree to make it an offset
+      unsigned int cursor = 0;
+      std::vector<unsigned int> keys;
+      for (auto it = destToSrc.cbegin(); it != destToSrc.cend(); ++it)
+      {
+        keys.push_back(it->first);
+      }
+      std::sort(keys.begin(), keys.end());
+      for (const auto dest : keys)
+      {
+        auto& offset = destToSrc[dest];
+
+        dests.emplace_back(dest, offset);
+        const auto newCursor = cursor + offset;
+        offset = cursor;
+        cursor = newCursor;
+      }
+
+      this->compressedEdges.resize(cursor);
       auto edgeIt = compressedEdges.begin();
       for (int i = 0; i < this->vertexDegs.size(); i++)
       {
@@ -243,23 +273,10 @@ class Graph : public CBase_Graph
         for (int j = 0; j < this->vertexDegs[i]; j++)
         {
           const auto dest = *edgeIt++;
-          auto it = destToSrc.find(dest);
-          if (it != destToSrc.end())
-            it->second.push_back(src);
-          else
-          {
-            destToSrc.insert({dest, {src}});
-            //destToSrc[dest].push_back(src);
-          }
+          auto& offset = destToSrc[dest];
+          this->compressedEdges[offset] = src;
+          offset++;
         }
-      }
-
-      for (auto it = destToSrc.begin(); it != destToSrc.end(); ++it) {
-        auto& dest = it->first;
-        auto& srcVec = it->second;
-        dests.emplace_back(dest, srcVec.size());
-        this->compressedEdges.insert(this->compressedEdges.end(), srcVec.begin(), srcVec.end());
-        srcVec.clear();
       }
     }
 
