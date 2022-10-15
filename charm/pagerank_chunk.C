@@ -243,8 +243,9 @@ class Graph : public CBase_Graph
         for (int j = 0; j < this->vertexDegs[i]; j++)
         {
           const auto dest = *edgeIt++;
-          if (destToSrc.count(dest) != 0)
-            destToSrc[dest].push_back(src);
+          auto it = destToSrc.find(dest);
+          if (it != destToSrc.end())
+            it->second.push_back(src);
           else
           {
             destToSrc.insert({dest, {src}});
