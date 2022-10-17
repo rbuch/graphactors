@@ -74,18 +74,18 @@ object GraphFromEdgesNodes {
     val rawEdges = ArrayBuffer[(Long, Long)]()
     val dis = new DataInputStream(new BufferedInputStream(new FileInputStream(path + ".edges")))
     rawVertices.grouped(2).foreach { value =>
-      println(s"${value(0)} ${value(1)}")
+      //println(s"${value(0)} ${value(1)}")
       val srcId = value(0)
       val count = value(1)
 
       for ( _ <- 1 to count) {
         val destId = java.lang.Integer.reverseBytes(dis.readInt())
-        println(s"  ${destId}")
+        //println(s"  ${destId}")
         val edge: (Long, Long) = (srcId, destId)
         rawEdges += edge
       }
     }
-    println(rawEdges)
+    //println(rawEdges)
     /*
     rawVertices.grouped(2).foreach { (id, count) =>
       println(s"${id} ${count}")
@@ -124,10 +124,9 @@ object GraphFromEdgesNodes {
     println(s"It took ${TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTimeNs)} ms" +
       " to load the edges")
 
-    val edgesTuple = Array((1L,2L), (2L, 3L))
     val rdd = sc.parallelize(rawEdges)
 
-    Graph.fromEdgeTuples(rdd, 1)
+    Graph.fromEdgeTuples(rdd, 1, None, StorageLevel.MEMORY_ONLY_SER, StorageLevel.MEMORY_ONLY_SER)
     /*
     GraphImpl.fromEdgePartitions(edges, defaultVertexAttr = 1, edgeStorageLevel = edgeStorageLevel,
       vertexStorageLevel = vertexStorageLevel)
@@ -138,6 +137,7 @@ object GraphFromEdgesNodes {
 
     //create SparkContext
     val sparkConf = new SparkConf().setAppName("GraphFromFile")
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
     val sc = new SparkContext(sparkConf)
 
     // read your file
@@ -160,13 +160,12 @@ object GraphFromEdgesNodes {
     // val graph = Graph.fromEdgeTuples(edgesRDD, 1)
 
     // you can see your graph
-    graph.triplets.collect.foreach(println)
+    //graph.triplets.collect.foreach(println)
 
-    /*
+    
     time {
     val ranks = graph.staticPageRank(20).vertices.sortBy(-_._2).take(1)
       println(ranks.foreach(println))
     }
-     */
   }
 }
