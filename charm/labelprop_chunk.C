@@ -16,10 +16,13 @@
 #include <utility>
 #include <filesystem>
 #include <tuple>
+#include <limits>
 
 /*readonly*/ CProxy_Main mainProxy;
+/*readonly*/ CProxy_UpdateStore updateStoreProxy;
 /*readonly*/ unsigned int numChunks;
 /*readonly*/ unsigned int verticesPerChunk;
+/*readonly*/ unsigned int numVertices;
 
 #define CHUNKINDEX(X) (std::min(numChunks - 1, X / verticesPerChunk))
 
@@ -74,7 +77,7 @@ class Main : public CBase_Main
         CkPrintf("No chares per PE argument provided, defaulting to 1!\n");
       }
 
-      unsigned int numVertices = std::stoul(m->argv[2]);
+      numVertices = std::stoul(m->argv[2]);
 
       const unsigned int chunksPerPE = (m->argc <= 3) ? 1 : std::stoul(m->argv[3]);
       numChunks = chunksPerPE * CkNumPes();
@@ -86,6 +89,7 @@ class Main : public CBase_Main
                numChunks, CkNumPes(), numVertices);
       mainProxy = thisProxy;
       arrProxy = CProxy_Graph::ckNew(numVertices, numChunks, numChunks);
+      updateStoreProxy = CProxy_UpdateStore::ckNew(numVertices);
 
 
       std::filesystem::path p(m->argv[1]);
@@ -175,6 +179,18 @@ class Main : public CBase_Main
     };
 };
 
+class UpdateStore : public CBase_UpdateStore
+{
+  public:
+    std::vector<std::atomic<unsigned int>> updates;
+
+    UpdateStore(int numVertices) : updates(numVertices)
+    {
+      for(auto& entry : updates)
+        entry.store(std::numeric_limits<unsigned int>::max(), std::memory_order_relaxed);
+    }
+};
+
 /*array [1D]*/
 class Graph : public CBase_Graph
 {
@@ -190,8 +206,6 @@ class Graph : public CBase_Graph
     unsigned int base;
 
     double start;
-
-  std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
   
   public:
     Graph(int numVertices, int numElements)
@@ -214,8 +228,6 @@ class Graph : public CBase_Graph
                 std::numeric_limits<unsigned int>::max());
 
       fresh.resize(numLocalVertices);
-
-      outgoing.resize(numElements);
 
       usesAtSync=true;
       setMigratable(false);
@@ -309,10 +321,12 @@ class Graph : public CBase_Graph
       }
       else
       {
-	auto edgeIt = dests.cbegin();
-        //std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
-        //outgoing.resize(numChunks);
+        UpdateStore* store = updateStoreProxy.ckLocalBranch();
+        auto& updates = store->updates;
 
+        std::vector<unsigned int> localLabels(numVertices, std::numeric_limits<unsigned int>::max());
+
+	auto edgeIt = dests.cbegin();
         for (int i = 0; i < degs.size(); i++)
         {
           if (fresh[i])
@@ -324,10 +338,8 @@ class Graph : public CBase_Graph
 	      const auto dest = *edgeIt++;
               if (CHUNKINDEX(dest) == thisIndex)
                 propagate(std::make_pair(dest, curLabel));
-              else
-              {
-                outgoing[CHUNKINDEX(dest)].emplace_back(dest, curLabel);
-              }
+              else if (curLabel < localLabels[dest])
+                localLabels[dest] = curLabel;
             }
           }
 	  else
@@ -336,18 +348,26 @@ class Graph : public CBase_Graph
 	  }
         }
 
-        for (int i = 0; i < outgoing.size(); i++)
+        for (int i = 0; i < localLabels.size(); i++)
         {
-	  if (!outgoing[i].empty())
-	  {
-	    thisProxy[i].propagateBatch(outgoing[i]);
-	    outgoing[i].clear();
-	  }
+          if (localLabels[i] < std::numeric_limits<unsigned int>::max() && localLabels[i] < updates[i])
+          {
+            unsigned int old = updates[i];
+            const unsigned int desired = localLabels[i];
+            do
+            {
+              if (old <= desired)
+                break;
+            } while (
+                !(&updates[i])
+                     ->compare_exchange_weak(old, desired, std::memory_order_relaxed));
+            //(&updates[i])->fetch_add(localUpdates[i], std::memory_order_relaxed);
+          }
         }
 
         if (thisIndex == 0)
         {
-          CkCallback cb(CkIndex_Graph::update(), thisProxy);
+          CkCallback cb(CkIndex_Graph::readFromGlobal(), thisProxy);
           CkStartQD(cb);
         }
       }
@@ -379,6 +399,24 @@ class Graph : public CBase_Graph
         {
           labels[dest - base] = newLabel;
         }
+      }
+    }
+
+    void readFromGlobal()
+    {
+      UpdateStore* store = updateStoreProxy.ckLocalBranch();
+      auto& updates = store->updates;
+      for (int i = base; i < base + labels.size(); i++)
+      {
+        const unsigned int candidate = updates[i];
+        if (candidate < labels[i - base])
+          labels[i - base] = candidate;
+      }
+
+      if (thisIndex == 0)
+      {
+        CkCallback cb(CkIndex_Graph::update(), thisProxy);
+        CkStartQD(cb);
       }
     }
 };
