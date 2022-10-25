@@ -16,10 +16,13 @@
 #include <utility>
 #include <filesystem>
 #include <tuple>
+#include <limits>
 
 /*readonly*/ CProxy_Main mainProxy;
+/*readonly*/ CProxy_UpdateStore updateStoreProxy;
 /*readonly*/ unsigned int numChunks;
 /*readonly*/ unsigned int verticesPerChunk;
+/*readonly*/ unsigned int numVertices;
 
 #define CHUNKINDEX(X) (std::min(numChunks - 1, X / verticesPerChunk))
 
@@ -74,7 +77,7 @@ class Main : public CBase_Main
         CkPrintf("No chares per PE argument provided, defaulting to 1!\n");
       }
 
-      unsigned int numVertices = std::stoul(m->argv[2]);
+      numVertices = std::stoul(m->argv[2]);
 
       const unsigned int chunksPerPE = (m->argc <= 3) ? 1 : std::stoul(m->argv[3]);
       numChunks = chunksPerPE * CkNumPes();
@@ -86,6 +89,7 @@ class Main : public CBase_Main
                numChunks, CkNumPes(), numVertices);
       mainProxy = thisProxy;
       arrProxy = CProxy_Graph::ckNew(numVertices, numChunks, numChunks);
+      updateStoreProxy = CProxy_UpdateStore::ckNew(numVertices);
 
 
       std::filesystem::path p(m->argv[1]);
@@ -173,6 +177,19 @@ class Main : public CBase_Main
       CkPrintf("All done\n");
       CkExit();
     };
+};
+
+class UpdateStore : public CBase_UpdateStore
+{
+  public:
+    std::vector<std::vector<std::vector<std::pair<unsigned int, unsigned int>>>> updates;
+
+    UpdateStore(int numVertices) : updates(numVertices)
+    {
+      updates.resize(numChunks);
+      for(auto& chunkUpdates : updates)
+        chunkUpdates.resize(numChunks);
+    }
 };
 
 /*array [1D]*/
@@ -308,8 +325,9 @@ class Graph : public CBase_Graph
       }
       else
       {
-        std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
-        outgoing.resize(numChunks);
+        UpdateStore* store = updateStoreProxy.ckLocalBranch();
+        auto& updates = store->updates[thisIndex];
+
         for (int i = 0; i < fresh.size(); i++)
         {
           if (fresh[i])
@@ -319,17 +337,15 @@ class Graph : public CBase_Graph
               if (CHUNKINDEX(dest) == thisIndex)
                 propagate(std::make_pair(dest, labels[i]));
               else
-              {
-                const auto pair = std::make_pair(dest, labels[i]);
-                outgoing[CHUNKINDEX(dest)].push_back(pair);
-              }
+                updates[CHUNKINDEX(dest)].push_back(std::make_pair(dest, labels[i]));
             }
           }
         }
 
-        for (int i = 0; i < outgoing.size(); i++)
+        for (int i = 0; i < updates.size(); i++)
         {
-          thisProxy[i].propagateBatch(outgoing[i]);
+          if (!updates[i].empty())
+            thisProxy[i].propagateBatch(thisIndex);
         }
 
         if (thisIndex == 0)
@@ -351,8 +367,12 @@ class Graph : public CBase_Graph
       }
     }
 
-    void propagateBatch(std::vector<std::pair<unsigned int, unsigned int>> candidates)
+    //void propagateBatch(std::vector<std::pair<unsigned int, unsigned int>> candidates)
+    void propagateBatch(int incomingIndex)
     {
+      UpdateStore* store = updateStoreProxy.ckLocalBranch();
+      auto& candidates = store->updates[incomingIndex][thisIndex];
+
       for (const auto& candidate : candidates)
       {
         const auto dest = candidate.first;
