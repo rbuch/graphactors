@@ -1,13 +1,20 @@
 mainmodule labelprop_chunk {
   readonly CProxy_Main mainProxy;
+  readonly CProxy_UpdateStore updateStoreProxy;
   readonly unsigned int numChunks;
   readonly unsigned int verticesPerChunk;
+  readonly unsigned int numVertices;
 
   mainchare Main {
     entry Main(CkArgMsg *m);
     entry void initDone(void);
     entry [reductiontarget] void startComputation(unsigned int count);
     entry [reductiontarget] void done(unsigned int count);
+  };
+
+  nodegroup UpdateStore {
+    entry UpdateStore(int numChunks);
+    entry [reductiontarget] void recvUpdate(unsigned int n, unsigned int data[n]);
   };
 
   array [1D] Graph {
@@ -20,6 +27,5 @@ mainmodule labelprop_chunk {
     entry void update();
     entry [reductiontarget] void iterate(bool isFresh);
     entry [aggregate] void propagate(std::pair<unsigned int, unsigned int> candidate);
-    entry void propagateBatch(std::vector<std::pair<unsigned int, unsigned int>> candidates);
   };
 };
