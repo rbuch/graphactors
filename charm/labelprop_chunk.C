@@ -94,38 +94,55 @@ class Main : public CBase_Main
       int nodeFd, edgeFd;
       size_t nodeFSize, edgeFSize;
 
-      std::tie(nodeFile, nodeFd, nodeFSize) = mapFile(p.replace_extension(".binodes"));
-      std::tie(edgeFile, edgeFd, edgeFSize) = mapFile(p.replace_extension(".biedges"));
+      std::tie(nodeFile, nodeFd, nodeFSize) = mapFile(p.replace_extension(".nodes"));
+      std::tie(edgeFile, edgeFd, edgeFSize) = mapFile(p.replace_extension(".edges"));
 
       const auto nodeLen = nodeFSize / sizeof(unsigned int);
       auto nodeCursor = (unsigned int*)nodeFile;
       auto edgeCursor = (unsigned int*)edgeFile;
       unsigned int maxVertex = 0;
 
+      std::vector<unsigned int> curDegs, curDests;
+      unsigned int curChunk = 0, curBase = 0;
       while (nodeCursor < (unsigned int*)nodeFile + nodeLen)
       {
         unsigned int src, numEdges;
         src = *nodeCursor++;
+        CmiEnforce(src < numVertices);
         numEdges = *nodeCursor++;
 
-        maxVertex = std::max(src, maxVertex);
+        maxVertex = std::max(maxVertex, src);
 
-        std::vector<unsigned int> edges;
-        edges.reserve(numEdges);
+        const unsigned int chunk = CHUNKINDEX(src);
+        if (chunk != curChunk)
+        {
+          arrProxy[curChunk].addAllEdges(std::move(curDegs), std::move(curDests));
+          curDegs.clear();
+          curDests.clear();
+          curChunk = chunk;
+          curBase = chunk * verticesPerChunk;
+        }
+
+        if (curDegs.size() < src - curBase)
+          curDegs.resize(src - curBase);
+        curDegs.push_back(numEdges);
 
         for (int i = 0; i < numEdges; i++)
         {
-          unsigned int dest = *edgeCursor++;
-          if (dest != src)
-          {
-            maxVertex = std::max(dest, maxVertex);
-            CmiEnforce(dest < numVertices && src < numVertices);
-            edges.push_back(dest);
-          }
+          const unsigned int dest = *edgeCursor++;
+          CmiEnforce(dest < numVertices);
+          curDests.push_back(dest);
+          maxVertex = std::max(maxVertex, dest);
         }
-
-        arrProxy[CHUNKINDEX(src)].addEdge(std::make_pair(src, edges));
       }
+
+      if (!curDegs.empty())
+      {
+        arrProxy[curChunk].addAllEdges(curDegs, curDests);
+        curDegs.clear();
+        curDests.clear();
+      }
+
       munmap((void*)nodeFile, nodeFSize);
       munmap((void*)edgeFile, edgeFSize);
       close(nodeFd);
@@ -201,6 +218,42 @@ class Graph : public CBase_Graph
       const auto dests = edgePair.second;
 
       edges[src - base] = dests;
+    }
+
+    void addAllEdges(std::vector<unsigned int> degs, std::vector<unsigned int> dests)
+    {
+      std::vector<std::vector<std::pair<unsigned int, unsigned int>>> revEdgeLists(numChunks);
+
+      auto cursor = dests.begin();
+      for (int i = 0; i < degs.size(); i++)
+      {
+        for (int j = 0; j < degs[i]; j++)
+        {
+          const auto dest = *cursor++;
+          edges[i].push_back(dest);
+          if (CHUNKINDEX(dest) == thisIndex)
+            edges[dest - base].push_back(i + base);
+          else
+            revEdgeLists[CHUNKINDEX(dest)].push_back(std::make_pair(dest, i + base));
+        }
+      }
+
+      for (int i = 0; i < numChunks; i++)
+      {
+        thisProxy[i].recvReverse(revEdgeLists[i]);
+      }
+    }
+
+    void recvReverse(std::vector<std::pair<unsigned int, unsigned int>> revEdges)
+    {
+      for (const auto& revEdge : revEdges)
+      {
+        const auto src = revEdge.first;
+        const auto dest = revEdge.second;
+        auto& srcEdges = edges[src - base];
+        if (std::find(srcEdges.begin(), srcEdges.end(), dest) == srcEdges.end())
+          edges[src - base].push_back(dest);
+      }
     }
 
     void getEdgeCount(CkCallback cb)
