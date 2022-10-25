@@ -227,14 +227,17 @@ class Graph : public CBase_Graph
       auto cursor = dests.begin();
       for (int i = 0; i < degs.size(); i++)
       {
+        const auto src = i + base;
         for (int j = 0; j < degs[i]; j++)
         {
           const auto dest = *cursor++;
+          if (dest == src)
+            continue;
           edges[i].push_back(dest);
           if (CHUNKINDEX(dest) == thisIndex)
-            edges[dest - base].push_back(i + base);
+            edges[dest - base].push_back(src);
           else
-            revEdgeLists[CHUNKINDEX(dest)].push_back(std::make_pair(dest, i + base));
+            revEdgeLists[CHUNKINDEX(dest)].push_back(std::make_pair(dest, src));
         }
       }
 
@@ -251,16 +254,20 @@ class Graph : public CBase_Graph
         const auto src = revEdge.first;
         const auto dest = revEdge.second;
         auto& srcEdges = edges[src - base];
-        if (std::find(srcEdges.begin(), srcEdges.end(), dest) == srcEdges.end())
-          edges[src - base].push_back(dest);
+        srcEdges.push_back(dest);
       }
     }
 
     void getEdgeCount(CkCallback cb)
     {
       unsigned int count = 0;
-      for (const auto& edgeVec : edges)
+      for (auto& edgeVec : edges)
+      {
+        std::sort(edgeVec.begin(), edgeVec.end());
+        const auto last = std::unique(edgeVec.begin(), edgeVec.end());
+        edgeVec.erase(last, edgeVec.end());
         count += edgeVec.size();
+      }
       contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
     }
 
