@@ -14,7 +14,7 @@ mainmodule labelprop_chunk {
     entry Graph(int numVertices, int numElements);
     entry void addEdge(std::pair<unsigned int, std::vector<unsigned int>> edges);
     entry void addAllEdges(std::vector<unsigned int> degs, std::vector<unsigned int> dests);
-    entry void recvReverse(std::vector<std::pair<unsigned int, unsigned int>> revEdges);
+    entry void recvReverse(std::vector<std::pair<unsigned int, unsigned int>> revs);
     entry void getEdgeCount(CkCallback cb);
     entry void runlabelprop();
     entry void update();

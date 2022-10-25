@@ -16,10 +16,12 @@
 #include <utility>
 #include <filesystem>
 #include <tuple>
+#include <limits>
 
 /*readonly*/ CProxy_Main mainProxy;
 /*readonly*/ unsigned int numChunks;
 /*readonly*/ unsigned int verticesPerChunk;
+/*readonly*/ unsigned int numVertices;
 
 #define CHUNKINDEX(X) (std::min(numChunks - 1, X / verticesPerChunk))
 
@@ -74,7 +76,7 @@ class Main : public CBase_Main
         CkPrintf("No chares per PE argument provided, defaulting to 1!\n");
       }
 
-      unsigned int numVertices = std::stoul(m->argv[2]);
+      numVertices = std::stoul(m->argv[2]);
 
       const unsigned int chunksPerPE = (m->argc <= 3) ? 1 : std::stoul(m->argv[3]);
       numChunks = chunksPerPE * CkNumPes();
@@ -184,6 +186,9 @@ class Graph : public CBase_Graph
     std::vector<unsigned int> oldLabels;
     std::vector<bool> fresh;
 
+    std::vector<std::pair<unsigned int, unsigned int>> dests;
+    std::vector<unsigned int> compressedEdges;
+
     unsigned int base;
 
     double start;
@@ -269,6 +274,54 @@ class Graph : public CBase_Graph
         count += edgeVec.size();
       }
       contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
+
+      std::unordered_map<unsigned int, unsigned int> destToSrc;
+
+      for (const auto& edgeVec : edges)
+      {
+        for (const auto& dest : edgeVec)
+        {
+          auto it = destToSrc.find(dest);
+          if (it != destToSrc.end())
+            it->second += 1;
+          else {
+            destToSrc.emplace(dest, 1);
+          }
+        }
+      }
+
+      std::vector<unsigned int> keys;
+      for (auto it = destToSrc.cbegin(); it != destToSrc.cend(); ++it)
+      {
+        keys.push_back(it->first);
+      }
+      std::sort(keys.begin(), keys.end());
+
+      unsigned int cursor = 0;
+      for (const auto dest : keys)
+      {
+        auto& offset = destToSrc[dest];
+
+        dests.emplace_back(dest, offset);
+        const auto newCursor = cursor + offset;
+        offset = cursor;
+        cursor = newCursor;
+      }
+
+      this->compressedEdges.resize(cursor);
+      auto edgeIt = compressedEdges.begin();
+      for (int i = 0; i < this->edges.size(); i++)
+      {
+        const auto src = i + base;
+        for (const auto& dest : edges[i])
+        {
+          auto& offset = destToSrc[dest];
+          this->compressedEdges[offset] = src;
+          offset++;
+        }
+        edges[i].clear();
+      }
+      edges.clear();
     }
 
     void runlabelprop()
@@ -285,6 +338,7 @@ class Graph : public CBase_Graph
       }
 
       bool localFresh = false;
+
       for (int i = 0; i < labels.size(); i++)
       {
         fresh[i] = (labels[i] < oldLabels[i]);
@@ -308,28 +362,46 @@ class Graph : public CBase_Graph
       }
       else
       {
-        std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
-        outgoing.resize(numChunks);
-        for (int i = 0; i < fresh.size(); i++)
+        auto edgeIt = compressedEdges.begin();
+        unsigned int curChunk = 0;
+
+        std::vector<std::pair<unsigned int, unsigned int>> outgoing;
+        for (int i = 0; i < dests.size(); i++)
         {
-          if (fresh[i])
+          const auto dest = dests[i].first;
+          const auto inDeg = dests[i].second;
+          const auto chunk = CHUNKINDEX(dest);
+
+          if (chunk != curChunk)
           {
-            for (const auto& dest : edges[i])
+            if (!outgoing.empty())
             {
-              if (CHUNKINDEX(dest) == thisIndex)
-                propagate(std::make_pair(dest, labels[i]));
-              else
-              {
-                const auto pair = std::make_pair(dest, labels[i]);
-                outgoing[CHUNKINDEX(dest)].push_back(pair);
-              }
+              thisProxy[curChunk].propagateBatch(outgoing);
+              outgoing.clear();
             }
+            curChunk = chunk;
           }
+
+          unsigned int label = dest;
+          for (int j = 0; j < inDeg; j++)
+          {
+            const auto src = *edgeIt++;
+            const auto srcIndex = src - base;
+            if (fresh[srcIndex] && labels[srcIndex] < label)
+              label = labels[srcIndex];
+          }
+          if (label == dest)
+            continue;
+          if (numChunks > 1 && chunk != thisIndex)
+            outgoing.push_back(std::make_pair(dest, label));
+          else
+            propagate(std::make_pair(dest, label));
         }
 
-        for (int i = 0; i < outgoing.size(); i++)
+        if (!outgoing.empty())
         {
-          thisProxy[i].propagateBatch(outgoing[i]);
+          thisProxy[curChunk].propagateBatch(outgoing);
+          outgoing.clear();
         }
 
         if (thisIndex == 0)
