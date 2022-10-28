@@ -94,8 +94,8 @@ class Main : public CBase_Main
       int nodeFd, edgeFd;
       size_t nodeFSize, edgeFSize;
 
-      std::tie(nodeFile, nodeFd, nodeFSize) = mapFile(p.replace_extension(".nodes"));
-      std::tie(edgeFile, edgeFd, edgeFSize) = mapFile(p.replace_extension(".edges"));
+      std::tie(nodeFile, nodeFd, nodeFSize) = mapFile(p.replace_extension(".binodes"));
+      std::tie(edgeFile, edgeFd, edgeFSize) = mapFile(p.replace_extension(".biedges"));
 
       const auto nodeLen = nodeFSize / sizeof(unsigned int);
       auto nodeCursor = (unsigned int*)nodeFile;
@@ -179,7 +179,10 @@ class Main : public CBase_Main
 class Graph : public CBase_Graph
 {
   private:
-    std::vector<std::vector<unsigned int>> edges;
+
+  std::vector<unsigned int> degs;
+  std::vector<unsigned int> dests;
+  
     std::vector<unsigned int> labels;
     std::vector<unsigned int> oldLabels;
     std::vector<bool> fresh;
@@ -188,40 +191,45 @@ class Graph : public CBase_Graph
 
     double start;
 
+  std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
+  
   public:
     Graph(int numVertices, int numElements)
         : base(thisIndex * (numVertices / numElements)) {
       CmiEnforce(numElements <= numVertices);
       // If this is the last chunk, fit the remainder in here
+      unsigned int numLocalVertices;
       if (thisIndex == numElements - 1)
-        edges.resize(numVertices / numElements + (numVertices % numElements));
+        numLocalVertices = numVertices / numElements + (numVertices % numElements);
       else
-        edges.resize(numVertices / numElements);
+        numLocalVertices = numVertices / numElements;
 
       // Assign labels to vertices
-      labels.resize(edges.size());
+      labels.resize(numLocalVertices);
       std::iota(labels.begin(), labels.end(), base);
 
       // Assign labels to vertices
-      oldLabels.resize(edges.size());
+      oldLabels.resize(numLocalVertices);
       std::fill(oldLabels.begin(), oldLabels.end(),
                 std::numeric_limits<unsigned int>::max());
 
-      fresh.resize(edges.size());
+      fresh.resize(numLocalVertices);
+
+      outgoing.resize(numElements);
+
+      usesAtSync=true;
+      setMigratable(false);
     }
 
     Graph(CkMigrateMessage* m) {}
 
-    void addEdge(std::pair<unsigned int, std::vector<unsigned int>> edgePair)
-    {
-      const auto src = edgePair.first;
-      const auto dests = edgePair.second;
 
-      edges[src - base] = dests;
-    }
 
     void addAllEdges(std::vector<unsigned int> degs, std::vector<unsigned int> dests)
     {
+      this->degs = std::move(degs);
+      this->dests = std::move(dests);
+      /*
       std::vector<std::vector<std::pair<unsigned int, unsigned int>>> revEdgeLists(numChunks);
 
       auto cursor = dests.begin();
@@ -245,21 +253,12 @@ class Graph : public CBase_Graph
       {
         thisProxy[i].recvReverse(revEdgeLists[i]);
       }
-    }
-
-    void recvReverse(std::vector<std::pair<unsigned int, unsigned int>> revEdges)
-    {
-      for (const auto& revEdge : revEdges)
-      {
-        const auto src = revEdge.first;
-        const auto dest = revEdge.second;
-        auto& srcEdges = edges[src - base];
-        srcEdges.push_back(dest);
-      }
+      */
     }
 
     void getEdgeCount(CkCallback cb)
     {
+      /*
       unsigned int count = 0;
       for (auto& edgeVec : edges)
       {
@@ -268,6 +267,8 @@ class Graph : public CBase_Graph
         edgeVec.erase(last, edgeVec.end());
         count += edgeVec.size();
       }
+      */
+      unsigned int count = dests.size();
       contribute(sizeof(unsigned int), &count, CkReduction::sum_uint, cb);
     }
 
@@ -308,14 +309,17 @@ class Graph : public CBase_Graph
       }
       else
       {
-        std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
-        outgoing.resize(numChunks);
+	auto edgeIt = dests.begin();
+        //std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
+        //outgoing.resize(numChunks);
         for (int i = 0; i < fresh.size(); i++)
         {
           if (fresh[i])
           {
-            for (const auto& dest : edges[i])
+            //for (const auto& dest : edges[i])
+	    for (int j = 0; j < degs[i]; j++)
             {
+	      const auto dest = *edgeIt++;
               if (CHUNKINDEX(dest) == thisIndex)
                 propagate(std::make_pair(dest, labels[i]));
               else
@@ -325,11 +329,19 @@ class Graph : public CBase_Graph
               }
             }
           }
+	  else
+	    {
+	      edgeIt += degs[i];
+	    }
         }
 
         for (int i = 0; i < outgoing.size(); i++)
         {
-          thisProxy[i].propagateBatch(outgoing[i]);
+	  if (!outgoing[i].empty())
+	  {
+	    thisProxy[i].propagateBatch(outgoing[i]);
+	    outgoing[i].clear();
+	  }
         }
 
         if (thisIndex == 0)
@@ -345,6 +357,8 @@ class Graph : public CBase_Graph
       const auto dest = candidate.first;
       const auto newLabel = candidate.second;
 
+      CmiEnforce(dest - base < labels.size());
+      
       if (newLabel < labels[dest - base])
       {
         labels[dest - base] = newLabel;
@@ -358,6 +372,8 @@ class Graph : public CBase_Graph
         const auto dest = candidate.first;
         const auto newLabel = candidate.second;
 
+	CmiEnforce(dest - base < labels.size());
+	
         if (newLabel < labels[dest - base])
         {
           labels[dest - base] = newLabel;
