@@ -138,7 +138,7 @@ class Main : public CBase_Main
 
       if (!curDegs.empty())
       {
-        arrProxy[curChunk].addAllEdges(curDegs, curDests);
+        arrProxy[curChunk].addAllEdges(std::move(curDegs), std::move(curDests));
         curDegs.clear();
         curDests.clear();
       }
@@ -309,30 +309,31 @@ class Graph : public CBase_Graph
       }
       else
       {
-	auto edgeIt = dests.begin();
+	auto edgeIt = dests.cbegin();
         //std::vector<std::vector<std::pair<unsigned int, unsigned int>>> outgoing;
         //outgoing.resize(numChunks);
-        for (int i = 0; i < fresh.size(); i++)
+
+        for (int i = 0; i < degs.size(); i++)
         {
           if (fresh[i])
           {
             //for (const auto& dest : edges[i])
+	    const auto curLabel = labels[i];
 	    for (int j = 0; j < degs[i]; j++)
             {
 	      const auto dest = *edgeIt++;
               if (CHUNKINDEX(dest) == thisIndex)
-                propagate(std::make_pair(dest, labels[i]));
+                propagate(std::make_pair(dest, curLabel));
               else
               {
-                const auto pair = std::make_pair(dest, labels[i]);
-                outgoing[CHUNKINDEX(dest)].push_back(pair);
+                outgoing[CHUNKINDEX(dest)].emplace_back(dest, curLabel);
               }
             }
           }
 	  else
-	    {
-	      edgeIt += degs[i];
-	    }
+	  {
+	    edgeIt += degs[i];
+	  }
         }
 
         for (int i = 0; i < outgoing.size(); i++)
